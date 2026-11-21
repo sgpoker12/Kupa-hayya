@@ -3,11 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#12151D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>קופה חיה</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&family=Rubik:wght@500;700&display=swap">
 <style>
 /* Layout: one narrow column, phone first. Pot figure leads, everything else is cards the host taps through during the night. */
@@ -96,6 +99,11 @@ td.n,th.n{text-align:left}
 textarea{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;width:100%;min-height:120px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);padding:8px;direction:ltr}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:99px;font-size:14px;z-index:20;max-width:90vw}
 .back{align-self:flex-start}
+.av{border-radius:50%;object-fit:cover;background:var(--surface2);display:inline-flex;align-items:center;justify-content:center;font-family:var(--f-num);font-weight:700;color:var(--muted);flex:none}
+.btn.link{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.pickgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.pickgrid .btn{display:flex;align-items:center;gap:8px;text-align:right}
+textarea.tpl{direction:rtl;min-height:70px;font:15px/1.4 var(--f-body)}
 @media (prefers-reduced-motion:no-preference){.btn{transition:border-color .15s,background .15s}}
 </style>
 <div id="app" dir="rtl" lang="he"></div>
@@ -153,7 +161,7 @@ function statsOf(games){
       a.games++;a.buy=r2(a.buy+r.buy);a.out=r2(a.out+r.out);if(r.net>0)a.wins++;
     }
   }
-  return Object.values(m).map(a=>({...a,net:r2(a.out-a.buy)})).sort((x,y)=>y.net-x.net);
+  return Object.values(m).map(a=>({...a,net:r2(a.out-a.buy)})).sort((x,y)=>x.net-y.net);
 }
 function phoneIntl(p){
   let d=String(p||'').replace(/\D/g,'');
@@ -171,6 +179,8 @@ function billText(g,row,name,bankerName,bankerPhone){
 /*END*/
 
 const KEY='kupa-hayya-v1';
+const Q=new URLSearchParams(location.search);
+const MODE=Q.get('p')?'player':Q.get('i')?'invite':'admin';
 const DEF_CHIPS=[
   {id:'c1',name:'לבן',color:'#E8E8EC',value:10},
   {id:'c2',name:'אדום',color:'#D64541',value:20},
@@ -185,7 +195,7 @@ function load(){
   return {players:[],games:[],lastChips:null,lastBuyin:100};
 }
 let S=load();
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){storageOK=false;}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){storageOK=false;}if(MODE==='admin')queueSync();}
 const ui={view:'home',tab:'games',gameId:null,draft:null,amt:{},fb:null,confirm:null,toast:'',logOpen:false,boxIn:''};
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -221,7 +231,7 @@ function toast(t){
   const d=document.createElement('div');d.className='toast';d.textContent=t;d.setAttribute('role','status');document.body.appendChild(d);
   setTimeout(()=>d.remove(),2200);
 }
-function go(view,id){ui.view=view;if(id!==undefined)ui.gameId=id;ui.confirm=null;ui.fb=null;ui.boxIn='';render();window.scrollTo(0,0);}
+function go(view,id){ui.view=view;if(id!==undefined)ui.gameId=id;ui.confirm=null;ui.fb=null;ui.boxIn='';render();window.scrollTo(0,0);if(view==='home')loadEvent();}
 function ensurePlayer(name){
   name=String(name||'').trim();if(!name)return null;
   let p=S.players.find(p=>p.name===name);
@@ -234,11 +244,12 @@ function topV(){return '<header class="top"><h1>קופה חיה</h1><span class=
 
 function homeV(){
   const active=S.games.find(g=>g.status!=='done');
-  let h='';
+  let h=cloudV();
   if(active){
     const s=settle(active);
     h+='<section class="card active"><div class="eyebrow">משחק פעיל</div><div class="row"><div class="grow"><b>'+esc(active.name)+'</b><div class="muted small">'+active.pids.length+' שחקנים · בנקאי: '+esc(pname(active.banker))+'</div></div><div class="big">'+money(s.pot)+'</div></div><button class="btn primary block" data-a="open" data-id="'+active.id+'">'+(active.status==='cash'?'המשך לספירת סיום':'חזרה למשחק')+'</button></section>';
   }else h+='<button class="btn primary block lg" data-a="newgame">משחק חדש</button>';
+  h+=eventV();
   h+='<div class="tabs" role="tablist">'+[['games','משחקים'],['players','שחקנים'],['backup','גיבוי']].map(t=>'<button class="tab" role="tab" aria-selected="'+(ui.tab===t[0])+'" data-a="tab" data-t="'+t[0]+'">'+t[1]+'</button>').join('')+'</div>';
   if(ui.tab==='games')h+=gamesTab();else if(ui.tab==='players')h+=playersTab();else h+=backupTab();
   return h;
@@ -248,18 +259,18 @@ function gamesTab(){
   if(!done.length)return '<section class="card"><b>עדיין אין משחקים שמורים</b><span class="muted">אחרי המשחק הראשון תופיע כאן ההיסטוריה, ובלשונית שחקנים תראו כמה כל אחד הרוויח או הפסיד מאז תחילת המעקב.</span></section>';
   return done.map(g=>{
     const s=settle(g);
-    return '<button class="card" style="text-align:right;cursor:pointer;font:inherit;color:inherit" data-a="open" data-id="'+g.id+'"><div class="row"><div class="grow"><b>'+esc(g.name)+'</b><div class="muted small">'+dateHe(g.date)+' · קופה '+money(s.pot)+'</div></div></div><div class="tags">'+s.rows.slice().sort((a,b)=>b.net-a.net).map(r=>'<span class="pill '+(r.net>0?'good':r.net<0?'bad':'')+'">'+esc(pname(r.pid))+' '+signed(r.net)+'</span>').join('')+'</div></button>';
+    return '<button class="card" style="text-align:right;cursor:pointer;font:inherit;color:inherit" data-a="open" data-id="'+g.id+'"><div class="row"><div class="grow"><b>'+esc(g.name)+'</b><div class="muted small">'+dateHe(g.date)+' · קופה '+money(s.pot)+'</div></div></div><div class="tags">'+s.rows.slice().sort((a,b)=>a.net-b.net).map(r=>'<span class="pill '+(r.net>0?'good':r.net<0?'bad':'')+'">'+esc(pname(r.pid))+' '+signed(r.net)+'</span>').join('')+'</div></button>';
   }).join('');
 }
 function playersTab(){
   const st=statsOf(S.games);
   let h='';
   if(st.length){
-    h+='<section class="card"><h2>מאז תחילת המעקב</h2><div class="tblw"><table><thead><tr><th>שחקן</th><th class="n">משחקים</th><th class="n">ביי-אין</th><th class="n">סיום</th><th class="n">נטו</th></tr></thead><tbody>'+st.map(a=>'<tr><td>'+esc(pname(a.pid))+'<div class="muted small">ניצחונות '+a.wins+' מתוך '+a.games+'</div></td><td class="n">'+num(a.games)+'</td><td class="n">'+money(a.buy)+'</td><td class="n">'+money(a.out)+'</td><td class="n '+cls(a.net)+'"><b>'+signed(a.net)+'</b><div class="muted small">ממוצע '+signed(r2(a.net/a.games))+'</div></td></tr>').join('')+'</tbody></table></div></section>';
+    h+='<section class="card"><h2>דירוג מאז תחילת המעקב</h2><span class="muted small">מהמפסיד הכי גדול למרוויח הכי גדול</span><div class="tblw"><table><thead><tr><th>שחקן</th><th class="n">משחקים</th><th class="n">ביי-אין</th><th class="n">סיום</th><th class="n">נטו</th></tr></thead><tbody>'+st.map(a=>'<tr><td>'+esc(pname(a.pid))+'<div class="muted small">ניצחונות '+a.wins+' מתוך '+a.games+'</div></td><td class="n">'+num(a.games)+'</td><td class="n">'+money(a.buy)+'</td><td class="n">'+money(a.out)+'</td><td class="n '+cls(a.net)+'"><b>'+signed(a.net)+'</b><div class="muted small">ממוצע '+signed(r2(a.net/a.games))+'</div></td></tr>').join('')+'</tbody></table></div></section>';
   }else h+='<section class="card"><span class="muted">הסטטיסטיקה תתחיל להצטבר אחרי המשחק הראשון ששמרתם.</span></section>';
   h+='<section class="card"><h2>ניהול שחקנים</h2><span class="muted small">טלפון נחוץ לשליחת הודעת תשלום בוואטסאפ. אמצעי תשלום מועדף קובע את ברירת המחדל כשהבנקאי משלם.</span>';
   if(!S.players.length)h+='<span class="muted">אין שחקנים עדיין. מוסיפים אותם בעת פתיחת משחק חדש או כאן.</span>';
-  h+=S.players.map(p=>'<div class="editp" style="padding-top:8px;border-top:1px solid var(--line)"><label class="f full">שם<input value="'+esc(p.name)+'" data-in="pl:'+p.id+':name"></label><label class="f">טלפון<input type="tel" inputmode="tel" value="'+esc(p.phone)+'" data-in="pl:'+p.id+':phone" placeholder="050-0000000"></label><label class="f">מקבל תשלום ב<select data-in="pl:'+p.id+':method"><option value="cash"'+(p.method==='cash'?' selected':'')+'>מזומן</option><option value="bit"'+(p.method==='bit'?' selected':'')+'>ביט</option></select></label></div>').join('');
+  h+=S.players.map(p=>'<div class="editp" style="padding-top:8px;border-top:1px solid var(--line)"><div class="full">'+playerExtra(p)+'</div><label class="f full">שם<input value="'+esc(p.name)+'" data-in="pl:'+p.id+':name"></label><label class="f">טלפון<input type="tel" inputmode="tel" value="'+esc(p.phone)+'" data-in="pl:'+p.id+':phone" placeholder="050-0000000"></label><label class="f">מקבל תשלום ב<select data-in="pl:'+p.id+':method"><option value="cash"'+(p.method==='cash'?' selected':'')+'>מזומן</option><option value="bit"'+(p.method==='bit'?' selected':'')+'>ביט</option></select></label></div>').join('');
   h+='<div class="row" style="padding-top:8px"><input id="npTab" placeholder="שם שחקן חדש" aria-label="שם שחקן חדש"><button class="btn" data-a="addPlayerTab">הוסף</button></div></section>';
   return h;
 }
@@ -270,7 +281,7 @@ function backupTab(){
 }
 
 function newDraft(){
-  return {name:'משחק '+new Date().toLocaleDateString('he-IL',{day:'numeric',month:'numeric'}),banker:null,buyin:S.lastBuyin||100,chips:(S.lastChips||DEF_CHIPS).map(c=>({...c})),pids:[]};
+  return {name:'משחק '+new Date().toLocaleDateString('he-IL',{day:'numeric',month:'numeric'}),banker:S.lastBanker||null,buyin:S.lastBuyin||100,chips:(S.lastChips||DEF_CHIPS).map(c=>({...c})),pids:[]};
 }
 function newV(){
   const d=ui.draft;
@@ -330,7 +341,7 @@ function detailV(){
   const bx=boxStatus(g),lastBox=(g.boxChecks||[]).slice(-1)[0];
   let h='<button class="btn back sm" data-a="home">‹ לרשימה</button>';
   h+='<section class="card"><div class="eyebrow">'+dateHe(g.date)+' · בנקאי: '+esc(pname(g.banker))+'</div><h2>'+esc(g.name)+'</h2><div class="row"><span class="muted">קופה</span><span class="big">'+money(s.pot)+'</span></div>'+(s.diff!==0?'<span class="pill warn">הפרש בספירה '+signed(s.diff)+'</span>':'')+'</section>';
-  h+='<section class="card"><h2>תוצאות</h2><div class="tblw"><table><thead><tr><th>שחקן</th><th class="n">ביי-אין</th><th class="n">סיום</th><th class="n">נטו</th></tr></thead><tbody>'+s.rows.slice().sort((a,b)=>b.net-a.net).map(r=>'<tr><td>'+esc(pname(r.pid))+'</td><td class="n">'+money(r.buy)+'</td><td class="n">'+money(r.out)+'</td><td class="n '+cls(r.net)+'"><b>'+signed(r.net)+'</b></td></tr>').join('')+'</tbody></table></div></section>';
+  h+='<section class="card"><h2>דירוג הערב</h2><span class="muted small">מהמפסיד הכי גדול למרוויח הכי גדול</span><div class="tblw"><table><thead><tr><th>שחקן</th><th class="n">ביי-אין</th><th class="n">סיום</th><th class="n">נטו</th></tr></thead><tbody>'+s.rows.slice().sort((a,b)=>a.net-b.net).map(r=>'<tr><td>'+esc(pname(r.pid))+'</td><td class="n">'+money(r.buy)+'</td><td class="n">'+money(r.out)+'</td><td class="n '+cls(r.net)+'"><b>'+signed(r.net)+'</b></td></tr>').join('')+'</tbody></table></div></section>';
   h+='<section class="card"><h2>משלמים לבנקאי</h2>'+(owe.length?'<span class="muted small">הסכום כבר מקזז ביי-אין ששולם במזומן או בביט. הכפתורים שולחים הודעה מוכנה. בקשת התשלום עצמה נוצרת באפליקציית ביט.</span>':'<span class="muted">אף אחד לא חייב כסף לבנקאי.</span>');
   h+=owe.map(r=>{
     const dm=(g.debtM&&g.debtM[r.pid])||'bit';
@@ -355,6 +366,7 @@ function detailV(){
 
 function fbV(){return ui.fb?'<section class="card"><span class="small muted">ההעתקה האוטומטית לא זמינה כאן. סמנו והעתיקו ידנית:</span><textarea id="fbta" readonly dir="rtl">'+esc(ui.fb)+'</textarea></section>':'';}
 function render(){
+  if(MODE!=='admin'){renderPub();return;}
   const v=ui.view;
   const body=v==='home'?homeV():v==='new'?newV():v==='live'?liveV():v==='cash'?cashV():detailV();
   $app.innerHTML=topV()+fbV()+body;
@@ -387,7 +399,7 @@ const A={
     if(!(d.pids.length>=2&&d.banker&&+d.buyin>0))return;
     const g={id:uid(),name:d.name.trim()||'משחק',date:Date.now(),status:'live',banker:d.banker,buyin:r2(d.buyin),chips:d.chips.map(c=>({id:c.id||uid(),name:c.name,color:c.color,value:r2(c.value)})),pids:d.pids.slice(),entries:[],cashouts:{},payout:{},paid:{}};
     logEv(g,'start','המשחק נפתח · בנקאי '+pname(g.banker)+' · ביי-אין רגיל '+fmtMoney(g.buyin));
-    S.games.push(g);S.lastChips=g.chips.map(c=>({...c}));S.lastBuyin=g.buyin;save();ui.amt={};go('live',g.id);
+    S.games.push(g);S.lastChips=g.chips.map(c=>({...c}));S.lastBuyin=g.buyin;S.lastBanker=g.banker;if(d.eventId)(S.pendAtt=S.pendAtt||[]).push({ev:d.eventId,pids:g.pids.slice()});save();ui.amt={};go('live',g.id);
   },
   buy(el){
     const g=G(),pid=el.dataset.pid,v=ui.amt[pid]!=null?ui.amt[pid]:g.buyin,amount=r2(v);
@@ -413,7 +425,7 @@ const A={
   cancelgame(){ui.confirm='cancelgame';render();},
   cancel(){ui.confirm=null;render();},
   delgame(){ui.confirm='delgame';render();},
-  delgameyes(){S.games=S.games.filter(g=>g.id!==ui.gameId);save();go('home');},
+  delgameyes(){S.tomb=(S.tomb||[]).concat(ui.gameId);S.games=S.games.filter(g=>g.id!==ui.gameId);save();go('home');},
   save(){
     const g=G(),s=settle(g);
     g.status='done';g.payout=g.payout||{};g.paid=g.paid||{};
@@ -452,6 +464,285 @@ const A={
   reset(){ui.confirm='reset';render();},
   resetyes(){S={players:[],games:[],lastChips:null,lastBuyin:100};save();ui.confirm=null;render();toast('הכל נמחק');}
 };
+/* ---------- cloud (Supabase) ---------- */
+const SB_URL='https://gllfcwwhexofvwpckghh.supabase.co',SB_KEY='sb_publishable_oB4JWI5g_hI4ONllbZ7mGw_gn8boolX';
+let sb=null;
+try{if(window.supabase)sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:MODE==='admin',autoRefreshToken:MODE==='admin',detectSessionInUrl:false}});}catch(e){sb=null;}
+const SYNC={session:null,busy:false,last:null,err:'',timer:null};
+const EV={loaded:false,ev:null,rows:[]};
+const DEF_TPL='ערב פוקר: {date}. מי שמגיע מאשר בקישור: {link}';
+const hashOf=o=>{const s=JSON.stringify(o);let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return String(h);};
+const saveQuiet=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}};
+const base=()=>location.origin+location.pathname;
+const evDateHe=d=>new Date(d+'T12:00:00').toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'numeric'});
+const randHex=n=>Array.from(crypto.getRandomValues(new Uint8Array(n)),b=>b.toString(16).padStart(2,'0')).join('');
+const editing=()=>['INPUT','TEXTAREA','SELECT'].includes(document.activeElement&&document.activeElement.tagName);
+function nextThursday(){const d=new Date();d.setDate(d.getDate()+(4-d.getDay()+7)%7);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+function av(p,s){
+  s=s||36;const ph=p&&p.photo,st='width:'+s+'px;height:'+s+'px';
+  if(ph&&/^data:image\//.test(ph))return '<img class="av" style="'+st+'" alt="" src="'+ph+'">';
+  return '<span class="av" style="'+st+';font-size:'+Math.round(s*.42)+'px">'+esc(((p&&p.name)||'?').trim().charAt(0))+'</span>';
+}
+function shrink(file,cb){
+  const img=new Image(),u=URL.createObjectURL(file);
+  img.onload=()=>{const s=160,c=document.createElement('canvas');c.width=c.height=s;const m=Math.min(img.width,img.height);
+    c.getContext('2d').drawImage(img,(img.width-m)/2,(img.height-m)/2,m,m,0,0,s,s);URL.revokeObjectURL(u);cb(c.toDataURL('image/jpeg',0.72));};
+  img.onerror=()=>cb(null);img.src=u;
+}
+function playerExtra(p){
+  let h='<div class="row">'+av(p,48)+'<label class="btn sm" style="display:inline-flex;align-items:center;cursor:pointer">'+(p.photo?'החלף תמונה':'הוסף תמונה')+'<input type="file" accept="image/*" data-photo="'+p.id+'" hidden></label>'+(p.photo?'<button class="btn sm" data-a="rmphoto" data-pid="'+p.id+'">הסר</button>':'')+'</div>';
+  if(sb&&p.token){
+    const url=base()+'?p='+p.token,ph=phoneIntl(p.phone);
+    h+='<div class="acts" style="margin-top:8px"><button class="btn sm" data-a="cplink" data-pid="'+p.id+'">העתק קישור אישי</button>'
+      +(ph?'<a class="btn sm link" target="_blank" rel="noopener" href="https://wa.me/'+ph+'?text='+encodeURIComponent('היי '+p.name+', זה הקישור האישי שלך למאזן ולאישורי הגעה: '+url)+'">שלח בוואטסאפ</a>':'')
+      +'<button class="btn sm" data-a="rotate" data-pid="'+p.id+'">'+(ui.confirm==='rot'+p.id?'לחץ שוב לאישור':'קישור חדש')+'</button></div>';
+  }else if(sb)h+='<div class="muted small" style="margin-top:6px">קישור אישי יופיע אחרי התחברות וסנכרון.</div>';
+  return h;
+}
+
+function cloudStHtml(){
+  if(!sb)return '<span class="pill warn">אין חיבור לשירות</span>';
+  if(!SYNC.session)return '<span class="pill">לא מחובר</span>';
+  if(SYNC.err)return '<span class="pill bad">שגיאת סנכרון</span> <span class="muted small">'+esc(SYNC.err)+'</span>';
+  if(SYNC.busy||SYNC.timer)return '<span class="pill">מסנכרן…</span>';
+  return '<span class="pill good">מחובר</span> <span class="muted small">'+(SYNC.last?'סונכרן '+timeHe(SYNC.last):'ממתין')+'</span>';
+}
+function cloudStatus(){const el=document.getElementById('cloudst');if(el)el.innerHTML=cloudStHtml();}
+function cloudV(){
+  let h='<section class="card"><div class="row"><b>ענן</b><span class="grow"></span><span id="cloudst">'+cloudStHtml()+'</span></div>';
+  if(!sb)h+='<span class="muted small">הנתונים נשמרים רק בטלפון.</span>';
+  else if(!SYNC.session){
+    h+=ui.login?'<label class="f">אימייל<input id="lgE" type="email" autocomplete="username" inputmode="email"></label><label class="f">סיסמה<input id="lgP" type="password" autocomplete="current-password"></label><button class="btn primary" data-a="login">התחבר</button>'
+      :'<span class="muted small">הנתונים נשמרים רק בטלפון. התחברות מפעילה גיבוי, דפי שחקנים ואישורי הגעה.</span><button class="btn" data-a="showlogin">התחברות מנהל</button>';
+  }else h+='<div class="acts"><button class="btn sm" data-a="syncnow">סנכרן עכשיו</button><button class="btn sm" data-a="pullcloud">טען מהענן</button><button class="btn sm" data-a="logout">התנתק</button></div>'
+    +(ui.confirm==='pull'?'<div class="seg2"><button class="btn danger" data-a="pullyes">להחליף את הנתונים בטלפון</button><button class="btn" data-a="cancel">ביטול</button></div>':'');
+  return h+'</section>';
+}
+function queueSync(){
+  if(MODE!=='admin'||!sb||!SYNC.session)return;
+  clearTimeout(SYNC.timer);SYNC.timer=setTimeout(()=>{SYNC.timer=null;pushAll();},1500);cloudStatus();
+}
+async function pushAll(){
+  if(!sb||!SYNC.session||SYNC.busy)return false;
+  if(!navigator.onLine){SYNC.err='אין אינטרנט, ימשיך כשיחזור';cloudStatus();return false;}
+  SYNC.busy=true;SYNC.err='';cloudStatus();
+  try{
+    const rows=S.players.map(p=>({id:p.id,name:p.name,phone:p.phone||'',pay_method:p.method==='bit'?'bit':'cash',photo:p.photo||null}));
+    if(rows.length){const r=await sb.from('players').upsert(rows,{onConflict:'id'});if(r.error)throw r.error;}
+    const tk=await sb.from('players').select('id,token');if(tk.error)throw tk.error;
+    tk.data.forEach(r=>{const p=S.players.find(x=>x.id===r.id);if(p)p.token=r.token;});
+    if(S.tomb&&S.tomb.length){const r=await sb.from('games').delete().in('id',S.tomb);if(r.error)throw r.error;S.tomb=[];}
+    S.hash=S.hash||{};
+    for(const g of S.games){
+      const h=hashOf(g);if(S.hash[g.id]===h)continue;
+      let r=await sb.from('games').upsert({id:g.id,data:g},{onConflict:'id'});if(r.error)throw r.error;
+      r=await sb.from('results').delete().eq('game_id',g.id);if(r.error)throw r.error;
+      if(g.status==='done'){
+        const rr=settle(g).rows.map(x=>({game_id:g.id,player_id:x.pid,game_date:new Date(g.date).toISOString(),game_name:g.name,buy:x.buy,cash_out:x.out,net:x.net}));
+        r=await sb.from('results').insert(rr);if(r.error)throw r.error;
+      }
+      S.hash[g.id]=h;
+    }
+    while(S.pendAtt&&S.pendAtt.length){
+      const a=S.pendAtt[0];
+      const q=await sb.from('rsvps').select('player_id,answer').eq('event_id',a.ev);if(q.error)throw q.error;
+      for(const r of q.data)if(r.answer==='yes'){const u=await sb.from('rsvps').update({attended:a.pids.includes(r.player_id)}).eq('event_id',a.ev).eq('player_id',r.player_id);if(u.error)throw u.error;}
+      const c=await sb.from('events').update({status:'done'}).eq('id',a.ev);if(c.error)throw c.error;
+      S.pendAtt.shift();
+    }
+    SYNC.last=Date.now();saveQuiet();
+  }catch(e){SYNC.err=(e&&e.message)||'שגיאה';}
+  SYNC.busy=false;cloudStatus();return !SYNC.err;
+}
+async function pullAll(){
+  try{
+    const a=await sb.from('players').select('id,name,phone,pay_method,photo,token'),b=await sb.from('games').select('data');
+    if(a.error||b.error)throw (a.error||b.error);
+    S.players=a.data.map(r=>({id:r.id,name:r.name,phone:r.phone,method:r.pay_method,photo:r.photo,token:r.token}));
+    S.games=b.data.map(r=>r.data);S.hash={};S.games.forEach(g=>{S.hash[g.id]=hashOf(g);});
+    saveQuiet();toast('הנתונים נטענו מהענן');
+  }catch(e){toast('הטעינה נכשלה');}
+}
+async function initCloud(){
+  if(!sb)return;
+  try{const r=await sb.auth.getSession();SYNC.session=r.data.session;}catch(e){}
+  sb.auth.onAuthStateChange((_e,s)=>{SYNC.session=s;cloudStatus();});
+  window.addEventListener('online',queueSync);
+  if(SYNC.session){queueSync();loadEvent();}
+  if(!editing())render();
+}
+
+/* ---------- event (next game night) ---------- */
+async function loadEvent(){
+  if(!sb||!SYNC.session)return;
+  try{
+    const e=await sb.from('events').select('*').eq('status','open').order('event_date').limit(1);if(e.error)throw e.error;
+    EV.ev=(e.data&&e.data[0])||null;EV.rows=[];
+    if(EV.ev){const r=await sb.from('rsvps').select('player_id,answer,created_at,attended').eq('event_id',EV.ev.id).order('created_at');if(r.error)throw r.error;EV.rows=r.data||[];}
+    EV.loaded=true;
+  }catch(e){EV.loaded=true;}
+  if(ui.view==='home'&&!editing())render();
+}
+function evLists(){
+  const yes=EV.rows.filter(r=>r.answer==='yes').sort((a,b)=>a.created_at<b.created_at?-1:a.created_at>b.created_at?1:(a.player_id<b.player_id?-1:1));
+  return {confirmed:yes.slice(0,EV.ev.capacity),wait:yes.slice(EV.ev.capacity),no:EV.rows.filter(r=>r.answer==='no')};
+}
+function inviteText(){
+  const t=(S.tpl&&S.tpl.invite)||DEF_TPL;
+  return t.split('{date}').join(evDateHe(EV.ev.event_date)).split('{link}').join(base()+'?i='+EV.ev.invite_token);
+}
+function nameRow(r){const p=pget(r.player_id);return '<div class="row">'+av(p,28)+'<span class="grow">'+esc(p.name||'?')+'</span><button class="tag" data-a="rmrsvp" data-pid="'+r.player_id+'" aria-label="הסר">×</button></div>';}
+function eventV(){
+  if(!sb||!SYNC.session)return '';
+  if(!EV.loaded)return '<section class="card"><b>הערב הקרוב</b><span class="muted small">טוען…</span></section>';
+  if(!EV.ev)return '<section class="card"><h2>הערב הקרוב</h2><span class="muted small">יוצר דף אישורי הגעה עם קישור לקבוצה.</span><div class="row"><input id="evDate" type="date" value="'+nextThursday()+'" aria-label="תאריך"><input id="evCap" type="number" inputmode="numeric" min="2" value="8" aria-label="מספר מקומות" style="width:80px"></div><button class="btn" data-a="mkevent">צור ערב</button></section>';
+  const L=evLists(),cap=EV.ev.capacity,answered=new Set(EV.rows.map(r=>r.player_id)),rest=S.players.filter(p=>!answered.has(p.id));
+  let h='<section class="card"><div class="row"><div class="grow"><h2>הערב הקרוב</h2><div class="muted small">'+evDateHe(EV.ev.event_date)+'</div></div><span class="pill '+(L.confirmed.length>=cap?'warn':'good')+'">'+num(L.confirmed.length+'/'+cap)+'</span></div>';
+  h+='<div class="eyebrow">מגיעים</div>'+(L.confirmed.map(nameRow).join('')||'<span class="muted small">עדיין אף אחד</span>');
+  if(L.wait.length)h+='<div class="eyebrow">רשימת המתנה</div>'+L.wait.map(nameRow).join('');
+  if(L.no.length)h+='<div class="eyebrow">לא מגיעים</div>'+L.no.map(nameRow).join('');
+  if(rest.length)h+='<div class="row"><select id="evAdd" aria-label="הוסף שחקן"><option value="">הוסף שחקן ידנית</option>'+rest.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('')+'</select><button class="btn" data-a="evadd">הוסף</button></div>';
+  h+='<label class="f">נוסח ההזמנה ({date} ו-{link} יוחלפו)<textarea class="tpl" data-in="tpl">'+esc((S.tpl&&S.tpl.invite)||DEF_TPL)+'</textarea></label>';
+  h+='<div class="acts"><a class="btn link" target="_blank" rel="noopener" href="https://wa.me/?text='+encodeURIComponent(inviteText())+'">שלח לקבוצה בוואטסאפ</a><button class="btn" data-a="cpinvite">העתק הזמנה</button></div>';
+  h+='<button class="btn primary block" data-a="fromevent">פתח משחק מהרשימה</button>';
+  h+=ui.confirm==='evcancel'?'<div class="seg2"><button class="btn danger" data-a="evcancelyes">בטל את הערב</button><button class="btn" data-a="cancel">חזרה</button></div>':'<button class="btn danger" data-a="evcancel">בטל ערב</button>';
+  return h+'</section>';
+}
+
+/* ---------- public pages: personal link (?p=) and invite (?i=) ---------- */
+const PUB={loading:true,data:null,err:'',busy:false,me:null,stale:false};
+const STAT_HE={confirmed:'מאושר, יש לך מקום',waitlist:'ברשימת המתנה',no:'סימנת שלא מגיע',none:'עוד לא ענית'};
+async function pubLoad(){
+  const isP=MODE==='player';
+  try{
+    const r=isP?await sb.rpc('player_view',{p_token:Q.get('p')}):await sb.rpc('invite_view',{p_invite:Q.get('i')});
+    if(r.error)throw r.error;
+    PUB.data=r.data;PUB.err=r.data?'':'bad';PUB.stale=false;
+    if(isP&&r.data){try{localStorage.setItem('pv-cache',JSON.stringify(r.data));}catch(e){}}
+  }catch(e){
+    PUB.stale=true;
+    if(isP&&!PUB.data){try{PUB.data=JSON.parse(localStorage.getItem('pv-cache')||'null');}catch(_){}}
+    if(!PUB.data)PUB.err='net';
+  }
+  PUB.loading=false;renderPub();
+}
+function pubStart(){
+  try{PUB.me=localStorage.getItem('inv-me');}catch(e){}
+  if(!sb){PUB.loading=false;PUB.err='net';renderPub();return;}
+  renderPub();pubLoad();
+  setInterval(()=>{if(!document.hidden&&!PUB.busy)pubLoad();},20000);
+}
+function renderPub(){$app.innerHTML=MODE==='player'?playerPageV():invitePageV();}
+function pubError(){return '<div class="card"><b>'+(PUB.err==='net'?'אין חיבור':'הקישור לא תקין')+'</b><span class="muted">'+(PUB.err==='net'?'בדוק אינטרנט ונסה שוב.':'בקש מהמארח קישור חדש.')+'</span></div>';}
+function rosterV(n){
+  const li=(a,t)=>a&&a.length?'<div class="eyebrow">'+t+'</div>'+a.map(p=>'<div class="row">'+av(p,28)+'<span>'+esc(p.name)+'</span></div>').join(''):'';
+  return '<div class="eyebrow">מגיעים '+num(n.confirmed.length+'/'+n.event.capacity)+'</div>'+(n.confirmed.length?n.confirmed.map(p=>'<div class="row">'+av(p,28)+'<span>'+esc(p.name)+'</span></div>').join(''):'<span class="muted small">עדיין אף אחד</span>')+li(n.waitlist,'רשימת המתנה')+li(n.declined,'לא מגיעים');
+}
+function boardV(d){
+  const b=d.board;if(!b||!b.overall||!b.overall.length)return '';
+  const meId=d.player.id,photo={};b.overall.forEach(x=>{photo[x.id]=x.photo;});
+  const row=x=>'<div class="line"><span class="row grow">'+av({name:x.name,photo:photo[x.id]},28)+'<span>'+esc(x.name)+(x.id===meId?' (אתה)':'')+'</span></span>'+(x.games?'<span class="muted small">'+num(x.games)+' משחקים</span>':'')+'<b class="'+cls(+x.net)+'">'+signed(+x.net)+'</b></div>';
+  let h='<section class="card"><h2>דירוג כללי</h2><span class="muted small">מהמפסיד הכי גדול למרוויח הכי גדול</span>'+b.overall.map(row).join('')+'</section>';
+  if(b.nights&&b.nights.length)h+='<section class="card"><h2>דירוג לפי ערב</h2>'+b.nights.map((n,i)=>'<details'+(i===0?' open':'')+' style="border-top:1px solid var(--line);padding-top:8px"><summary style="cursor:pointer;min-height:32px"><b>'+dateHe(n.date)+'</b> <span class="muted small">'+esc(n.name)+'</span></summary>'+(n.rows||[]).map(row).join('')+'</details>').join('')+'</section>';
+  return h;
+}
+function playerPageV(){
+  if(PUB.loading)return '<div class="card"><span class="muted">טוען…</span></div>';
+  if(!PUB.data)return pubError();
+  const d=PUB.data,s=d.summary,net=+s.net;
+  let h='<header class="row" style="gap:14px">'+av(d.player,56)+'<div><h1>'+esc(d.player.name)+'</h1><div class="muted small">מאזן אישי'+(PUB.stale?' · מידע שמור, אין חיבור':'')+'</div></div></header>';
+  h+='<section class="card"><div class="eyebrow">סיכום כולל</div><div class="potnum '+cls(net)+'">'+signed(net)+'</div><div>'+(net>0?'אתה ברווח':net<0?'אתה בהפסד':'אתה מאוזן')+(s.games?' אחרי '+num(s.games)+' משחקים':'')+'</div><div class="split"><span>ניצחונות '+num(s.wins+' מתוך '+s.games)+'</span><span>ממוצע למשחק '+(s.games?signed(r2(net/s.games)):'—')+'</span></div><div class="split"><span>אישרת הגעה '+num(s.said_yes)+' פעמים</span><span>לא הגעת אחרי אישור '+num(s.no_show)+'</span></div></section>';
+  if(d.tonight){
+    const es=d.tonight.entries||[],tot=es.reduce((a,e)=>a+(+e.amount||0),0);
+    h+='<section class="card"><div class="eyebrow">הערב · '+esc(d.tonight.name)+'</div><div class="row"><span class="grow">סה"כ ביי-אין</span><span class="big">'+money(tot)+'</span></div>'+(es.length?'<div class="tags">'+es.map(e=>'<span class="pill">'+num(fmtMoney(e.amount))+' · '+(M_HE[e.method]||'')+'</span>').join('')+'</div>':'<span class="muted small">עדיין אין ביי-אין רשום</span>')+'</section>';
+  }
+  if(d.next_event){
+    const n=d.next_event,st=n.my_status;
+    h+='<section class="card"><div class="eyebrow">הערב הקרוב</div><div class="row"><b class="grow">'+evDateHe(n.event.date)+'</b><span class="pill '+(st==='confirmed'?'good':st==='waitlist'?'warn':'')+'">'+STAT_HE[st]+'</span></div><div class="seg2"><button class="btn'+(st==='confirmed'||st==='waitlist'?' on':'')+'" data-a="prsvp" data-v="yes">מגיע</button><button class="btn'+(st==='no'?' on':'')+'" data-a="prsvp" data-v="no">לא מגיע</button></div>'+rosterV(n)+'</section>';
+  }
+  h+=boardV(d);
+  h+='<section class="card"><h2>ההיסטוריה שלי</h2>'+(d.history.length?'<div class="tblw"><table><thead><tr><th>תאריך</th><th class="n">ביי-אין</th><th class="n">סיום</th><th class="n">נטו</th></tr></thead><tbody>'+d.history.map(r=>'<tr><td>'+dateHe(r.date)+'<div class="muted small">'+esc(r.name)+'</div></td><td class="n">'+money(r.buy)+'</td><td class="n">'+money(r.out)+'</td><td class="n '+cls(+r.net)+'"><b>'+signed(+r.net)+'</b></td></tr>').join('')+'</tbody></table></div>':'<span class="muted">עדיין אין משחקים שמורים.</span>')+'</section>';
+  return h;
+}
+function invitePageV(){
+  if(PUB.loading)return '<div class="card"><span class="muted">טוען…</span></div>';
+  if(!PUB.data)return pubError();
+  const d=PUB.data,e=d.event,me=d.roster.find(p=>p.id===PUB.me);
+  let h='<header><h1>ערב פוקר</h1><div class="muted">'+evDateHe(e.date)+'</div></header>';
+  if(e.status!=='open')return h+'<div class="card"><b>הערב הזה כבר סגור</b></div>';
+  if(me){
+    const st=d.confirmed.some(p=>p.id===me.id)?'confirmed':d.waitlist.some(p=>p.id===me.id)?'waitlist':d.declined.some(p=>p.id===me.id)?'no':'none';
+    h+='<section class="card"><div class="row">'+av(me,44)+'<div class="grow"><b>'+esc(me.name)+'</b><div><span class="pill '+(st==='confirmed'?'good':st==='waitlist'?'warn':'')+'">'+STAT_HE[st]+'</span></div></div><button class="btn sm" data-a="notme">זה לא אני</button></div><div class="seg2"><button class="btn'+(st==='confirmed'||st==='waitlist'?' on':'')+'" data-a="irsvp" data-v="yes">מגיע</button><button class="btn'+(st==='no'?' on':'')+'" data-a="irsvp" data-v="no">לא מגיע</button></div></section>';
+  }else h+='<section class="card"><b>מי אתה?</b><div class="pickgrid">'+d.roster.map(p=>'<button class="btn" data-a="pickme" data-pid="'+p.id+'">'+av(p,30)+'<span>'+esc(p.name)+'</span></button>').join('')+'</div></section>';
+  return h+'<section class="card">'+rosterV(d)+'</section>';
+}
+const SAVED_HE={confirmed:'נרשמת, יש לך מקום',waitlist:'המקומות תפוסים, נרשמת לרשימת המתנה',no:'סומן שלא מגיע',none:''};
+Object.assign(A,{
+  showlogin(){ui.login=true;render();},
+  async login(){
+    const em=document.getElementById('lgE').value.trim(),pw=document.getElementById('lgP').value;
+    if(!em||!pw){toast('הזן אימייל וסיסמה');return;}
+    const r=await sb.auth.signInWithPassword({email:em,password:pw});
+    if(r.error){toast('פרטי כניסה שגויים');return;}
+    SYNC.session=r.data.session;ui.login=false;
+    if(!S.games.length&&!S.players.length)await pullAll();else await pushAll();
+    render();loadEvent();
+  },
+  async logout(){await sb.auth.signOut();SYNC.session=null;EV.loaded=false;EV.ev=null;render();},
+  async syncnow(){const ok=await pushAll();toast(ok?'סונכרן':'הסנכרון נכשל');render();},
+  pullcloud(){ui.confirm='pull';render();},
+  async pullyes(){ui.confirm=null;await pullAll();render();},
+  rmphoto(el){pget(el.dataset.pid).photo=null;save();render();},
+  cplink(el){copy(base()+'?p='+pget(el.dataset.pid).token,'הקישור הועתק');},
+  async rotate(el){
+    const id=el.dataset.pid;
+    if(ui.confirm!=='rot'+id){ui.confirm='rot'+id;render();return;}
+    ui.confirm=null;const t=randHex(24);
+    const r=await sb.from('players').update({token:t}).eq('id',id);
+    if(r.error){toast('צריך חיבור לענן');render();return;}
+    pget(id).token=t;saveQuiet();render();toast('נוצר קישור חדש. הישן לא יעבוד יותר');
+  },
+  async mkevent(){
+    const d=document.getElementById('evDate').value,c=Math.max(2,Math.floor(+document.getElementById('evCap').value||8));
+    if(!d){toast('בחר תאריך');return;}
+    const r=await sb.from('events').insert({event_date:d,capacity:c});
+    if(r.error){toast('יצירת הערב נכשלה');return;}
+    await loadEvent();render();
+  },
+  async evadd(){
+    const id=document.getElementById('evAdd').value;if(!id)return;
+    if(!(await pushAll())){toast('צריך חיבור לענן');return;}
+    const r=await sb.from('rsvps').upsert({event_id:EV.ev.id,player_id:id,answer:'yes'},{onConflict:'event_id,player_id'});
+    if(r.error){toast('ההוספה נכשלה');return;}
+    await loadEvent();render();
+  },
+  async rmrsvp(el){await sb.from('rsvps').delete().eq('event_id',EV.ev.id).eq('player_id',el.dataset.pid);await loadEvent();render();},
+  cpinvite(){copy(inviteText(),'ההזמנה הועתקה');},
+  fromevent(){
+    const L=evLists(),d=newDraft();
+    d.pids=L.confirmed.map(r=>r.player_id).filter(id=>S.players.some(p=>p.id===id));
+    d.eventId=EV.ev.id;if(!d.pids.includes(d.banker))d.banker=null;
+    ui.draft=d;go('new');
+  },
+  evcancel(){ui.confirm='evcancel';render();},
+  async evcancelyes(){await sb.from('events').update({status:'cancelled'}).eq('id',EV.ev.id);ui.confirm=null;await loadEvent();render();},
+  async prsvp(el){
+    PUB.busy=true;
+    try{const r=await sb.rpc('player_rsvp',{p_token:Q.get('p'),p_answer:el.dataset.v});if(r.error)throw r.error;toast(SAVED_HE[r.data.status]||'נשמר');}
+    catch(e){toast('לא הצלחתי לשמור, נסה שוב');}
+    PUB.busy=false;await pubLoad();
+  },
+  async irsvp(el){
+    PUB.busy=true;
+    try{const r=await sb.rpc('invite_rsvp',{p_invite:Q.get('i'),p_player:PUB.me,p_answer:el.dataset.v});if(r.error)throw r.error;toast(SAVED_HE[r.data.status]||'נשמר');}
+    catch(e){toast('לא הצלחתי לשמור, נסה שוב');}
+    PUB.busy=false;await pubLoad();
+  },
+  pickme(el){PUB.me=el.dataset.pid;try{localStorage.setItem('inv-me',PUB.me);}catch(e){}renderPub();},
+  notme(){PUB.me=null;try{localStorage.removeItem('inv-me');}catch(e){}renderPub();}
+});
+
 document.addEventListener('click',e=>{
   const el=e.target.closest('[data-a]');
   if(!el||el.tagName==='INPUT')return;
@@ -459,6 +750,11 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{
   const el=e.target;
+  if(el.type==='file'&&el.dataset.photo){
+    const f=el.files&&el.files[0];if(!f)return;
+    shrink(f,u=>{if(!u){toast('לא הצלחתי לקרוא את התמונה');return;}pget(el.dataset.photo).photo=u;save();render();});
+    return;
+  }
   if(el.tagName==='INPUT'&&(el.type==='checkbox'||el.type==='radio')&&el.dataset.a){const f=A[el.dataset.a];if(f)f(el);return;}
   onInput(el,'change');
 });
@@ -470,6 +766,7 @@ function onInput(el,ev){
   else if(t==='chip'){const c=ui.draft.chips[+p[1]];if(c)c[p[2]]=el.value;}
   else if(t==='amt'){ui.amt[p[1]]=el.value;}
   else if(t==='box'){ui.boxIn=el.value;}
+  else if(t==='tpl'){S.tpl=S.tpl||{};S.tpl.invite=el.value;save();}
   else if(t==='cc'||t==='cd'){
     const g=G();g.cashouts=g.cashouts||{};
     const c=g.cashouts[p[1]]||(g.cashouts[p[1]]={counts:{},direct:''});
@@ -482,5 +779,5 @@ function onInput(el,ev){
   else if(t==='pl'){const pl=S.players.find(x=>x.id===p[1]);if(pl){pl[p[2]]=el.value;save();}}
 }
 try{if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
-render();
+if(MODE==='admin'){render();initCloud();}else pubStart();
 </script>
