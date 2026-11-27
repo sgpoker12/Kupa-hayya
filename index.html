@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <body>
-<title>קופה חיה</title>
+<title>חמישי אצל שאול</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Heebo:wght@400;500;700&family=Rubik:wght@500;700&display=swap">
 <style>
@@ -128,7 +128,18 @@ details[open]>summary::before{transform:rotate(-135deg)}
 .rk.up .rb{background:var(--good)} .rk.dn .rb{background:var(--bad)}
 .rk b{font:700 17px var(--f-num)}
 i.me{font-style:normal;font-size:11px;font-weight:700;padding:1px 8px;border-radius:99px;border:1px solid var(--accent);color:var(--accent);margin-inline-start:7px}
-@media (prefers-reduced-motion:no-preference){.btn{transition:border-color .15s,background .15s}}
+@media (prefers-reduced-motion:no-preference){.btn{transition:border-color .15s,background .15s}.dot{animation:pulse 1.6s ease-in-out infinite}}
+@keyframes pulse{50%{opacity:.35}}
+.bars{display:flex;gap:4px;overflow-x:auto;padding:6px 0 2px}
+.bc{flex:1 0 46px;min-width:46px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bz{position:relative;width:100%}
+.bz::after{content:"";position:absolute;inset-inline:0;top:50%;height:1px;background:var(--line-hi)}
+.bar{position:absolute;left:22%;right:22%;border-radius:4px}
+.bar.up{bottom:50%;background:linear-gradient(0deg,rgb(95 203 159/.55),var(--good))}
+.bar.dn{top:50%;background:linear-gradient(180deg,rgb(240 139 118/.55),var(--bad))}
+.bv{font:700 12.5px var(--f-num);direction:ltr}
+.bn{font-size:12px;color:var(--muted);max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bad);box-shadow:0 0 10px var(--bad);flex:none}
 </style>
 <div id="app" dir="rtl" lang="he"></div>
 <script>
@@ -147,21 +158,22 @@ function cashoutOf(g,pid){
   if(c.direct!==''&&c.direct!=null&&!isNaN(+c.direct))return r2(c.direct);
   return chipValue(g,c.counts);
 }
-/* transfer>0: הבנקאי משלם לשחקן. transfer<0: השחקן משלם לבנקאי. חוב = ביי-אין שעדיין לא שולם. */
+/* מזומן משולם במקום, בזמן המשחק. ביט (וחוב ישן) מתחשבנים רק בסוף.
+   transfer>0: הבנקאי משלם לשחקן. transfer<0: השחקן משלם לבנקאי. */
 function settle(g){
   const per=gameTotals(g);
   const rows=g.pids.map(pid=>{
     const t=per[pid],out=cashoutOf(g,pid);
-    return {pid,buy:t.buy,cash:t.cash,bit:t.bit,credit:t.credit,out,net:r2(out-t.buy),transfer:pid===g.banker?0:r2(out-t.credit)};
+    return {pid,buy:t.buy,cash:t.cash,bit:t.bit,credit:t.credit,out,net:r2(out-t.buy),transfer:pid===g.banker?0:r2(out-t.bit-t.credit)};
   });
   const pot=r2(rows.reduce((s,x)=>s+x.buy,0));
   const outTotal=r2(rows.reduce((s,x)=>s+x.out,0));
   return {rows,pot,outTotal,diff:r2(outTotal-pot)};
 }
-/* מה אמור להיות פיזית בקופה ובחשבון הביט. "עכשיו" לפי מה שסומן שולם, "בסוף" אחרי שכל השורות ישולמו. */
+/* מה אמור להיות פיזית בקופה ובחשבון הביט. מזומן נכנס בזמן המשחק. ביט נכנס לחשבון רק כשמסמנים שולם בסוף. */
 function boxStatus(g){
   let cash=0,bit=0;
-  for(const e of g.entries){if(e.void)continue;if(e.method==='cash')cash+=e.amount;else if(e.method==='bit')bit+=e.amount;}
+  for(const e of g.entries){if(e.void)continue;if(e.method==='cash')cash+=e.amount;}
   const cashBuy=r2(cash);
   let cashEnd=cash,bitEnd=bit;
   for(const r of settle(g).rows){
@@ -185,7 +197,7 @@ function statsOf(games){
       a.games++;a.buy=r2(a.buy+r.buy);a.out=r2(a.out+r.out);if(r.net>0)a.wins++;
     }
   }
-  return Object.values(m).map(a=>({...a,net:r2(a.out-a.buy)})).sort((x,y)=>x.net-y.net);
+  return Object.values(m).map(a=>({...a,net:r2(a.out-a.buy)})).sort((x,y)=>y.net-x.net);
 }
 function phoneIntl(p){
   let d=String(p||'').replace(/\D/g,'');
@@ -264,7 +276,7 @@ function ensurePlayer(name){
 }
 
 /* ---------- views ---------- */
-function topV(){return '<header class="top"><h1>קופה חיה</h1><span class="sub">משחק ביתי · קאש</span></header>'+(storageOK?'':'<div class="card"><span class="pill warn">שים לב</span><span class="small">הדפדפן הזה לא שומר נתונים. היסטוריה לא תישמר בין ביקורים.</span></div>');}
+function topV(){return '<header class="top"><h1>חמישי אצל שאול</h1><span class="sub">פוקר ביתי</span></header>'+(storageOK?'':'<div class="card"><span class="pill warn">שים לב</span><span class="small">הדפדפן הזה לא שומר נתונים. היסטוריה לא תישמר בין ביקורים.</span></div>');}
 
 function homeV(){
   const active=S.games.find(g=>g.status!=='done');
@@ -279,19 +291,28 @@ function homeV(){
   if(ui.tab==='games')h+=gamesTab();else if(ui.tab==='players')h+=playersTab();else h+=backupTab();
   return h+(lg?cloudV():'');
 }
+/* column chart: profit rises above the line, loss hangs below it; avatars on top */
+function barsV(rows,hgt){
+  rows=rows.slice().sort((a,b)=>b.net-a.net);
+  const mx=Math.max(1,...rows.map(r=>Math.abs(r.net))),half=hgt/2;
+  return '<div class="bars">'+rows.map(r=>{
+    const px=r.net===0?0:Math.max(4,Math.round(Math.abs(r.net)/mx*half));
+    return '<div class="bc"><div class="bav">'+av({name:r.name,photo:r.photo},32)+'</div><div class="bz" style="height:'+hgt+'px"><div class="bar '+(r.net>=0?'up':'dn')+'" style="height:'+px+'px"></div></div><div class="bv '+cls(r.net)+'">'+signed(r.net)+'</div><div class="bn">'+esc(r.name)+'</div></div>';
+  }).join('')+'</div>';
+}
 function gamesTab(){
   const done=S.games.filter(g=>g.status==='done').sort((a,b)=>b.date-a.date);
   if(!done.length)return '<section class="card"><b>עדיין אין משחקים שמורים</b><span class="muted">אחרי המשחק הראשון תופיע כאן ההיסטוריה, ובלשונית שחקנים תראו כמה כל אחד הרוויח או הפסיד מאז תחילת המעקב.</span></section>';
-  return done.map(g=>{
+  return done.map((g,i)=>{
     const s=settle(g);
-    return '<button class="card" style="text-align:right;cursor:pointer;font:inherit;color:inherit" data-a="open" data-id="'+g.id+'"><div class="row"><div class="grow"><b>'+esc(g.name)+'</b><div class="muted small">'+dateHe(g.date)+' · קופה '+money(s.pot)+'</div></div></div><div class="tags">'+s.rows.slice().sort((a,b)=>a.net-b.net).map(r=>'<span class="pill '+(r.net>0?'good':r.net<0?'bad':'')+'">'+esc(pname(r.pid))+' '+signed(r.net)+'</span>').join('')+'</div></button>';
+    return '<button class="card" style="text-align:right;cursor:pointer;font:inherit;color:inherit" data-a="open" data-id="'+g.id+'"><div class="row"><div class="grow"><b>'+esc(g.name)+'</b><div class="muted small">'+dateHe(g.date)+' · '+num(s.rows.length)+' שחקנים · קופה '+money(s.pot)+'</div></div>'+(i===0?'<span class="pill">האחרון</span>':'')+'</div>'+barsV(s.rows.map(r=>({name:pname(r.pid),photo:pget(r.pid).photo,net:r.net})),i===0?160:110)+'</button>';
   }).join('');
 }
 function playersTab(){
   const st=statsOf(S.games);
   let h='';
   if(st.length){
-    h+='<section class="card"><h2>דירוג מאז תחילת המעקב</h2><span class="muted small">מהמפסיד הכי גדול למרוויח הכי גדול</span><div class="tblw"><table><thead><tr><th>שחקן</th><th class="n">משחקים</th><th class="n">ביי-אין</th><th class="n">סיום</th><th class="n">נטו</th></tr></thead><tbody>'+st.map(a=>'<tr><td>'+esc(pname(a.pid))+'<div class="muted small">ניצחונות '+a.wins+' מתוך '+a.games+'</div></td><td class="n">'+num(a.games)+'</td><td class="n">'+money(a.buy)+'</td><td class="n">'+money(a.out)+'</td><td class="n '+cls(a.net)+'"><b>'+signed(a.net)+'</b><div class="muted small">ממוצע '+signed(r2(a.net/a.games))+'</div></td></tr>').join('')+'</tbody></table></div></section>';
+    h+='<section class="card"><h2>דירוג מאז תחילת המעקב</h2><span class="muted small">מהמרוויח הכי גדול למפסיד הכי גדול</span><div class="tblw"><table><thead><tr><th>שחקן</th><th class="n">משחקים</th><th class="n">ביי-אין</th><th class="n">סיום</th><th class="n">נטו</th></tr></thead><tbody>'+st.map(a=>'<tr><td>'+esc(pname(a.pid))+'<div class="muted small">ניצחונות '+a.wins+' מתוך '+a.games+'</div></td><td class="n">'+num(a.games)+'</td><td class="n">'+money(a.buy)+'</td><td class="n">'+money(a.out)+'</td><td class="n '+cls(a.net)+'"><b>'+signed(a.net)+'</b><div class="muted small">ממוצע '+signed(r2(a.net/a.games))+'</div></td></tr>').join('')+'</tbody></table></div></section>';
   }else h+='<section class="card"><span class="muted">הסטטיסטיקה תתחיל להצטבר אחרי המשחק הראשון ששמרתם.</span></section>';
   h+='<section class="card"><h2>ניהול שחקנים</h2><span class="muted small">טלפון נחוץ לשליחת הודעת תשלום בוואטסאפ. אמצעי תשלום מועדף קובע את ברירת המחדל כשהבנקאי משלם.</span>';
   if(!S.players.length)h+='<span class="muted">אין שחקנים עדיין. מוסיפים אותם בעת פתיחת משחק חדש או כאן.</span>';
@@ -306,7 +327,7 @@ function backupTab(){
 }
 
 function newDraft(){
-  return {name:'משחק '+new Date().toLocaleDateString('he-IL',{day:'numeric',month:'numeric'}),banker:S.lastBanker||null,buyin:S.lastBuyin||100,chips:(S.lastChips||DEF_CHIPS).map(c=>({...c})),pids:[]};
+  return {name:'משחק '+new Date().toLocaleDateString('he-IL',{day:'numeric',month:'numeric'}),banker:S.lastBanker||null,buyin:50,chips:(S.lastChips||DEF_CHIPS).map(c=>({...c})),pids:[]};
 }
 function newV(){
   const d=ui.draft;
@@ -324,13 +345,13 @@ function liveV(){
   const g=G(),per=gameTotals(g);
   const pot=r2(g.pids.reduce((s,p)=>s+per[p].buy,0));
   const tot=k=>r2(g.pids.reduce((s,p)=>s+per[p][k],0));
-  let h='<button class="btn back sm" data-a="home">‹ לרשימה</button>';
-  h+='<section class="card"><div class="eyebrow">'+esc(g.name)+' · בנקאי: '+esc(pname(g.banker))+'</div><div class="potnum" aria-label="קופה חיה">'+money(pot)+'</div><div class="split"><span>מזומן '+money(tot('cash'))+'</span><span>ביט '+money(tot('bit'))+'</span><span>חוב '+money(tot('credit'))+'</span></div><span class="muted small">חוב: ביי-אין שעוד לא שולם. הוא יקוזז בסיום.</span></section>';
+  let h='<div class="row"><button class="btn back sm" data-a="home">‹ לרשימה</button><span class="grow"></span><button class="btn sm" data-a="mute">צליל כבש: '+(S.mute?'כבוי':'פועל')+'</button></div>';
+  h+='<section class="card"><div class="eyebrow">'+esc(g.name)+' · בנקאי: '+esc(pname(g.banker))+'</div><div class="potnum" aria-label="הקופה">'+money(pot)+'</div><div class="split"><span>מזומן '+money(tot('cash'))+'</span><span>ביט '+money(tot('bit'))+'</span></div><span class="muted small">מזומן משולם במקום. ביט מתחשבנים בסוף המשחק.</span></section>';
   h+=g.pids.map(pid=>{
     const t=per[pid],es=g.entries.filter(e=>e.pid===pid&&!e.void);
     return '<article class="card"><div class="row"><b>'+esc(pname(pid))+'</b>'+(pid===g.banker?'<span class="pill">בנקאי</span>':'')+'<span class="grow"></span><span class="big">'+money(t.buy)+'</span></div>'
      +(es.length?'<div class="tags">'+es.map(e=>'<button class="tag" data-a="delentry" data-e="'+e.id+'" aria-label="מחק '+fmtMoney(e.amount)+' '+M_HE[e.method]+'">'+num(fmtMoney(e.amount))+' · '+M_HE[e.method]+' ×</button>').join('')+'</div>':'<span class="muted small">אין עדיין ביי-אין</span>')
-     +'<div class="add"><input type="number" inputmode="decimal" min="0" data-in="amt:'+pid+'" value="'+esc(ui.amt[pid]!=null?ui.amt[pid]:g.buyin)+'" aria-label="סכום ביי-אין או ריביי"><div class="seg3"><button class="btn" data-a="buy" data-pid="'+pid+'" data-m="cash">מזומן</button><button class="btn" data-a="buy" data-pid="'+pid+'" data-m="bit">ביט</button><button class="btn" data-a="buy" data-pid="'+pid+'" data-m="credit">חוב</button></div></div></article>';
+     +'<div class="add"><input type="number" inputmode="decimal" min="0" data-in="amt:'+pid+'" value="'+esc(ui.amt[pid]!=null?ui.amt[pid]:g.buyin)+'" aria-label="סכום ביי-אין או ריביי"><div class="seg2"><button class="btn" data-a="buy" data-pid="'+pid+'" data-m="cash">מזומן</button><button class="btn" data-a="buy" data-pid="'+pid+'" data-m="bit">ביט</button></div></div></article>';
   }).join('');
   const others=S.players.filter(p=>!g.pids.includes(p.id));
   h+='<section class="card"><h2>שחקן מצטרף</h2><div class="row"><select id="lateSel" aria-label="שחקן קיים"><option value="">בחר שחקן</option>'+others.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('')+'</select><input id="lateNew" placeholder="או שם חדש" aria-label="שם חדש"></div><button class="btn" data-a="late">הוסף למשחק</button></section>';
@@ -356,6 +377,8 @@ function footHtml(g){
   return '<div class="split"><span>קופה '+money(s.pot)+'</span><span>נספר '+money(s.outTotal)+'</span>'+d+'</div>';
 }
 
+const sm=n=>n<0?signed(n):money(n);
+const buyInfo=r=>'ביי-אין '+money(r.buy)+(r.bit||r.credit?' (ביט '+money(r.bit+r.credit)+')':'')+' · סיום '+money(r.out);
 function detailV(){
   const g=G();
   if(!g)return homeV();
@@ -367,23 +390,23 @@ function detailV(){
   let h='<button class="btn back sm" data-a="home">‹ לרשימה</button>';
   h+='<section class="card"><div class="eyebrow">'+dateHe(g.date)+' · בנקאי: '+esc(pname(g.banker))+'</div><h2>'+esc(g.name)+'</h2><div class="row"><span class="muted">קופה</span><span class="big">'+money(s.pot)+'</span></div>'+(s.diff!==0?'<span class="pill warn">הפרש בספירה '+signed(s.diff)+'</span>':'')+'</section>';
   h+='<section class="card"><h2>דירוג הערב</h2><span class="muted small">מהמפסיד הכי גדול למרוויח הכי גדול</span><div class="tblw"><table><thead><tr><th>שחקן</th><th class="n">ביי-אין</th><th class="n">סיום</th><th class="n">נטו</th></tr></thead><tbody>'+s.rows.slice().sort((a,b)=>a.net-b.net).map(r=>'<tr><td>'+esc(pname(r.pid))+'</td><td class="n">'+money(r.buy)+'</td><td class="n">'+money(r.out)+'</td><td class="n '+cls(r.net)+'"><b>'+signed(r.net)+'</b></td></tr>').join('')+'</tbody></table></div></section>';
-  h+='<section class="card"><h2>משלמים לבנקאי</h2>'+(owe.length?'<span class="muted small">הסכום כבר מקזז ביי-אין ששולם במזומן או בביט. הכפתורים שולחים הודעה מוכנה. בקשת התשלום עצמה נוצרת באפליקציית ביט.</span>':'<span class="muted">אף אחד לא חייב כסף לבנקאי.</span>');
+  if(owe.length)h+='<section class="card"><h2>משלמים לבנקאי</h2><span class="muted small">הסכום הוא ההפסד שלו אחרי ניכוי מה ששילם במזומן במהלך המשחק. הכפתורים שולחים הודעה מוכנה. בקשת התשלום עצמה נוצרת באפליקציית ביט.</span>';
   h+=owe.map(r=>{
     const dm=(g.debtM&&g.debtM[r.pid])||'bit';
     const txt=billText(g,r,pname(r.pid),bk.name||pname(g.banker),bk.phone);
     const ph=phoneIntl(pget(r.pid).phone);
     const wa='https://wa.me/'+ph+'?text='+encodeURIComponent(txt);
     const paid=g.paid&&g.paid[r.pid];
-    return '<div class="line'+(paid?' done':'')+'"><div class="who"><b>'+esc(pname(r.pid))+'</b><div class="muted small">חייב '+money(-r.transfer)+'</div></div><div class="seg2" style="min-width:130px"><button class="btn sm'+(dm==='cash'?' on':'')+'" data-a="debtm" data-pid="'+r.pid+'" data-m="cash">משלם במזומן</button><button class="btn sm'+(dm==='bit'?' on':'')+'" data-a="debtm" data-pid="'+r.pid+'" data-m="bit">משלם בביט</button></div><div class="acts"><a class="btn sm" style="text-decoration:none;display:inline-flex;align-items:center" href="'+wa+'" target="_blank" rel="noopener">וואטסאפ</a><button class="btn sm" data-a="copymsg" data-pid="'+r.pid+'">העתק הודעה</button><button class="btn sm'+(paid?' on':'')+'" data-a="paid" data-pid="'+r.pid+'" aria-pressed="'+(!!paid)+'">'+(paid?'שולם ✓':'סמן שולם')+'</button></div></div>';
+    return '<div class="line'+(paid?' done':'')+'"><div class="who"><b>'+esc(pname(r.pid))+'</b><div class="muted small">חייב '+money(-r.transfer)+'</div><div class="muted small">'+buyInfo(r)+'</div></div><div class="seg2" style="min-width:130px"><button class="btn sm'+(dm==='cash'?' on':'')+'" data-a="debtm" data-pid="'+r.pid+'" data-m="cash">משלם במזומן</button><button class="btn sm'+(dm==='bit'?' on':'')+'" data-a="debtm" data-pid="'+r.pid+'" data-m="bit">משלם בביט</button></div><div class="acts"><a class="btn sm" style="text-decoration:none;display:inline-flex;align-items:center" href="'+wa+'" target="_blank" rel="noopener">וואטסאפ</a><button class="btn sm" data-a="copymsg" data-pid="'+r.pid+'">העתק הודעה</button><button class="btn sm'+(paid?' on':'')+'" data-a="paid" data-pid="'+r.pid+'" aria-pressed="'+(!!paid)+'">'+(paid?'שולם ✓':'סמן שולם')+'</button></div></div>';
   }).join('');
   if(owe.length>1)h+='<button class="btn" data-a="copyall">העתק את כל ההודעות</button>';
-  h+='</section>';
-  h+='<section class="card"><h2>הבנקאי משלם</h2>'+(get.length?'':'<span class="muted">הבנקאי לא חייב לאף אחד.</span>');
+  if(owe.length)h+='</section>';
+  h+='<section class="card"><h2>הבנקאי משלם</h2>'+(get.length?'<span class="muted small">מי שיצא עם יותר ממה שנשאר לו לשלם בביט.</span>':'<span class="muted">הבנקאי לא חייב לאף אחד.</span>');
   h+=get.map(r=>{
     const m=payM(r.pid),paid=g.paid&&g.paid[r.pid];
-    return '<div class="line'+(paid?' done':'')+'"><div class="who"><b>'+esc(pname(r.pid))+'</b><div class="muted small">מקבל '+money(r.transfer)+'</div></div><div class="seg2" style="min-width:130px"><button class="btn sm'+(m==='cash'?' on':'')+'" data-a="paym" data-pid="'+r.pid+'" data-m="cash">מזומן</button><button class="btn sm'+(m==='bit'?' on':'')+'" data-a="paym" data-pid="'+r.pid+'" data-m="bit">ביט</button></div><button class="btn sm'+(paid?' on':'')+'" data-a="paid" data-pid="'+r.pid+'" aria-pressed="'+(!!paid)+'">'+(paid?'שולם ✓':'סמן שולם')+'</button></div>';
+    return '<div class="line'+(paid?' done':'')+'"><div class="who"><b>'+esc(pname(r.pid))+'</b><div class="muted small">מקבל '+money(r.transfer)+'</div><div class="muted small">'+buyInfo(r)+'</div></div><div class="seg2" style="min-width:130px"><button class="btn sm'+(m==='cash'?' on':'')+'" data-a="paym" data-pid="'+r.pid+'" data-m="cash">מזומן</button><button class="btn sm'+(m==='bit'?' on':'')+'" data-a="paym" data-pid="'+r.pid+'" data-m="bit">ביט</button></div><button class="btn sm'+(paid?' on':'')+'" data-a="paid" data-pid="'+r.pid+'" aria-pressed="'+(!!paid)+'">'+(paid?'שולם ✓':'סמן שולם')+'</button></div>';
   }).join('')+'</section>';
-  h+='<section class="card"><h2>בדיקת קופה</h2><div class="tblw"><table><thead><tr><th></th><th class="n">צפוי עכשיו</th><th class="n">צפוי בסוף</th></tr></thead><tbody><tr><td>מזומן בקופה</td><td class="n">'+money(bx.cashNow)+'</td><td class="n">'+money(bx.cashEnd)+'</td></tr><tr><td>ביט בחשבון</td><td class="n">'+money(bx.bitNow)+'</td><td class="n">'+money(bx.bitEnd)+'</td></tr></tbody></table></div><span class="muted small">"עכשיו" מתעדכן לפי מה שסומן שולם. "בסוף" אחרי שכל התשלומים יתבצעו. הסכומים כוללים גם את החלק של הבנקאי עצמו.</span>'+boxInput()+boxResult(lastBox)+'</section>';
+  h+='<section class="card"><h2>בדיקת קופה</h2><div class="tblw"><table><thead><tr><th></th><th class="n">צפוי עכשיו</th><th class="n">צפוי בסוף</th></tr></thead><tbody><tr><td>מזומן בקופה</td><td class="n">'+sm(bx.cashNow)+'</td><td class="n">'+sm(bx.cashEnd)+'</td></tr><tr><td>ביט בחשבון</td><td class="n">'+sm(bx.bitNow)+'</td><td class="n">'+sm(bx.bitEnd)+'</td></tr></tbody></table></div><span class="muted small">"עכשיו" מתעדכן לפי מה שסומן שולם. "בסוף" אחרי שכל התשלומים יתבצעו. הסכומים כוללים גם את החלק של הבנקאי עצמו.</span>'+(bx.cashEnd<0?'<span class="pill warn">מינוס במזומן: צריך להיות לך '+fmtMoney(-bx.cashEnd)+' מזומן כדי לשלם למי שמקבל</span>':'')+boxInput()+boxResult(lastBox)+'</section>';
   h+=logV(g);
   h+='<div class="seg2"><button class="btn" data-a="reopen">ערוך ספירה</button>'+(ui.confirm==='delgame'?'<button class="btn danger" data-a="delgameyes">בטוח? מחק</button>':'<button class="btn danger" data-a="delgame">מחק משחק</button>')+'</div>';
   return h;
@@ -403,6 +426,32 @@ function copy(text,okMsg){
   const done=()=>toast(okMsg||'הועתק');
   const fail=()=>{ui.fb=text;render();};
   try{navigator.clipboard.writeText(text).then(done,fail);}catch(e){fail();}
+}
+/* A synthesized sheep: a sawtooth with a fast tremolo and two vowel-like filters. Longer for bigger amounts. */
+let AC=null;
+function bleat(t0,len){
+  const o=AC.createOscillator(),vib=AC.createOscillator(),vg=AC.createGain(),lfo=AC.createOscillator(),lg=AC.createGain(),am=AC.createGain(),
+        f1=AC.createBiquadFilter(),f2=AC.createBiquadFilter(),out=AC.createGain();
+  o.type='sawtooth';
+  o.frequency.setValueAtTime(300,t0);o.frequency.linearRampToValueAtTime(390,t0+0.09);o.frequency.exponentialRampToValueAtTime(280,t0+len);
+  vib.frequency.value=6;vg.gain.value=8;vib.connect(vg);vg.connect(o.frequency);
+  am.gain.value=0.6;lfo.frequency.value=27;lg.gain.value=0.4;lfo.connect(lg);lg.connect(am.gain);
+  f1.type='bandpass';f1.frequency.value=900;f1.Q.value=3;f2.type='bandpass';f2.frequency.value=1900;f2.Q.value=4;
+  o.connect(am);am.connect(f1);am.connect(f2);f1.connect(out);f2.connect(out);
+  out.gain.setValueAtTime(0.0001,t0);out.gain.exponentialRampToValueAtTime(1.1,t0+0.05);out.gain.setValueAtTime(1.1,t0+Math.max(0.06,len-0.14));out.gain.exponentialRampToValueAtTime(0.0001,t0+len);
+  out.connect(AC.destination);
+  [o,vib,lfo].forEach(x=>{x.start(t0);x.stop(t0+len+0.05);});
+}
+function baa(amount,ctx){
+  try{
+    if(S.mute&&!ctx)return;
+    const total=Math.min(6,0.6+Math.max(0,+amount||0)/100*0.9);
+    if(!ctx){AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();}
+    const c=ctx||AC,prev=AC;AC=c;
+    let t=c.currentTime+0.02,left=total;
+    while(left>0.05){const len=Math.min(1.1,left);bleat(t,len);t+=len+0.07;left-=len+0.07;}
+    if(ctx)AC=prev;
+  }catch(e){}
 }
 function msgFor(g,pid){
   const s=settle(g),r=s.rows.find(x=>x.pid===pid),bk=pget(g.banker);
@@ -430,7 +479,7 @@ const A={
     const g=G(),pid=el.dataset.pid,v=ui.amt[pid]!=null?ui.amt[pid]:g.buyin,amount=r2(v);
     if(!(amount>0)){toast('הזן סכום');return;}
     g.entries.push({id:uid(),pid,amount,method:el.dataset.m,t:Date.now()});
-    logEv(g,'add',pname(pid)+': +'+fmtMoney(amount)+' '+M_HE[el.dataset.m]);save();render();toast(pname(pid)+' · '+fmtMoney(amount)+' '+M_HE[el.dataset.m]);
+    logEv(g,'add',pname(pid)+': +'+fmtMoney(amount)+' '+M_HE[el.dataset.m]);baa(amount);save();render();toast(pname(pid)+' · '+fmtMoney(amount)+' '+M_HE[el.dataset.m]);
   },
   delentry(el){
     const g=G(),e=g.entries.find(x=>x.id===el.dataset.e);
@@ -595,6 +644,7 @@ async function initCloud(){
   sb.auth.onAuthStateChange((_e,s)=>{SYNC.session=s;cloudStatus();});
   window.addEventListener('online',queueSync);
   if(SYNC.session){queueSync();loadEvent();}
+  setInterval(()=>{if(!document.hidden&&SYNC.session&&ui.view==='home')loadEvent();},30000);
   if(!editing())render();
 }
 
@@ -606,6 +656,11 @@ async function loadEvent(){
     EV.ev=(e.data&&e.data[0])||null;EV.rows=[];
     if(EV.ev){const r=await sb.from('rsvps').select('player_id,answer,created_at,attended').eq('event_id',EV.ev.id).order('created_at');if(r.error)throw r.error;EV.rows=r.data||[];}
     EV.loaded=true;
+    if(EV.ev){                                   // remember who was on the waiting list, to spot who moved up later
+      S.wl=S.wl||{};const w=S.wl[EV.ev.id]=S.wl[EV.ev.id]||[];let ch=false;
+      evLists().wait.forEach(r=>{if(!w.includes(r.player_id)){w.push(r.player_id);ch=true;}});
+      if(ch)save();
+    }
   }catch(e){EV.loaded=true;}
   if(ui.view==='home'&&!editing())render();
 }
@@ -617,18 +672,41 @@ function inviteText(){
   const t=(S.tpl&&S.tpl.invite)||DEF_TPL;
   return t.split('{date}').join(evDateHe(EV.ev.event_date)).split('{link}').join(base()+'?i='+EV.ev.invite_token);
 }
-function nameRow(r){const p=pget(r.player_id);return '<div class="row">'+av(p,28)+'<span class="grow">'+esc(p.name||'?')+'</span><button class="tag" data-a="rmrsvp" data-pid="'+r.player_id+'" aria-label="הסר">×</button></div>';}
+const DEF_MSG={
+  remind:'היי {name}, תזכורת: ערב פוקר ביום {date}. עוד לא אישרת הגעה, מאשרים כאן: {link}',
+  ok:'היי {name}, התפנה מקום בערב הפוקר ביום {date} ואתה מוזמן להגיע! נתראה. {link}',
+  wait:'היי {name}, המקומות לערב {date} מלאים ושמנו אותך ברשימת המתנה. נעדכן אם יתפנה מקום: {link}',
+  no:'היי {name}, חבל שלא מגיע השבוע. נשמח לראות אותך בפעם הבאה!'};
+const MSG_LBL={remind:'תזכורת למי שטרם ענה',ok:'כשמישהו עלה מהמתנה',wait:'כשמישהו ברשימת המתנה',no:'כשמישהו מבטל'};
+const msgTpl=k=>((S.tpl&&S.tpl[k])||DEF_MSG[k]);
+function msgText(k,p){
+  const link=p.token?base()+'?p='+p.token:(EV.ev?base()+'?i='+EV.ev.invite_token:'');
+  return msgTpl(k).split('{name}').join(p.name||'').split('{date}').join(EV.ev?evDateHe(EV.ev.event_date):'').split('{link}').join(link);
+}
+function waBtn(k,p){
+  const ph=phoneIntl(p.phone);
+  if(!ph)return '<span class="muted small">אין טלפון</span>';
+  const sent=EV.ev&&S.sent&&S.sent[EV.ev.id+':'+k+':'+p.id];
+  return '<a class="btn sm link'+(sent?' on':'')+'" data-a="sent" data-k="'+k+'" data-pid="'+p.id+'" target="_blank" rel="noopener" href="https://wa.me/'+ph+'?text='+encodeURIComponent(msgText(k,p))+'">'+(sent?'נשלחה ✓':'הודעה')+'</a>';
+}
+function nameRow(r,k){const p=pget(r.player_id);return '<div class="row">'+av(p,28)+'<span class="grow">'+esc(p.name||'?')+'</span>'+(k==='ok'?'<span class="pill good">עלה מהמתנה</span>':'')+(k?waBtn(k,p):'')+'<button class="tag" data-a="rmrsvp" data-pid="'+r.player_id+'" aria-label="הסר">×</button></div>';}
 function eventV(){
   if(!sb||!SYNC.session)return '';
   if(!EV.loaded)return '<section class="card"><b>הערב הקרוב</b><span class="muted small">טוען…</span></section>';
   if(!EV.ev)return '<section class="card"><h2>הערב הקרוב</h2><span class="muted small">יוצר דף אישורי הגעה עם קישור לקבוצה.</span><div class="row"><input id="evDate" type="date" value="'+nextThursday()+'" aria-label="תאריך"><input id="evCap" type="number" inputmode="numeric" min="2" value="8" aria-label="מספר מקומות" style="width:80px"></div><button class="btn" data-a="mkevent">צור ערב</button></section>';
   const L=evLists(),cap=EV.ev.capacity,answered=new Set(EV.rows.map(r=>r.player_id)),rest=S.players.filter(p=>!answered.has(p.id));
   let h='<section class="card"><div class="row"><div class="grow"><h2>הערב הקרוב</h2><div class="muted small">'+evDateHe(EV.ev.event_date)+'</div></div><span class="pill '+(L.confirmed.length>=cap?'warn':'good')+'">'+num(L.confirmed.length+'/'+cap)+'</span></div>'+seatsV({event:{capacity:cap},confirmed:L.confirmed,waitlist:L.wait});
-  h+='<div class="eyebrow">מגיעים</div>'+(L.confirmed.map(nameRow).join('')||'<span class="muted small">עדיין אף אחד</span>');
-  if(L.wait.length)h+='<div class="eyebrow">רשימת המתנה</div>'+L.wait.map(nameRow).join('');
-  if(L.no.length)h+='<div class="eyebrow">לא מגיעים</div>'+L.no.map(nameRow).join('');
+  const ed=k=>'<details><summary class="muted small">ערוך את נוסח ההודעה</summary><div class="muted small">אפשר להשתמש ב-{name} {date} {link}</div><textarea class="tpl" data-in="tpl:'+k+'" aria-label="נוסח הודעה">'+esc(msgTpl(k))+'</textarea><button class="btn sm" data-a="tplreset" data-k="'+k+'" style="align-self:flex-start">החזר לנוסח המקורי</button></details>';
+  const wl=(S.wl&&S.wl[EV.ev.id])||[],promo=L.confirmed.filter(r=>wl.includes(r.player_id));
+  h+='<div class="eyebrow">מגיעים</div>'+(L.confirmed.map(r=>nameRow(r,wl.includes(r.player_id)?'ok':null)).join('')||'<span class="muted small">עדיין אף אחד</span>');
+  if(promo.length)h+='<span class="muted small">מי שעלה מהמתנה: כפתור "הודעה" מזמין אותו להגיע.</span>'+ed('ok');
+  if(L.wait.length)h+='<div class="eyebrow">רשימת המתנה · "הודעה" מעדכנת שהוא ברשימת המתנה</div>'+L.wait.map(r=>nameRow(r,'wait')).join('')+ed('wait');
+  if(L.no.length)h+='<div class="eyebrow">לא מגיעים · "הודעה" אומרת "חבל"</div>'+L.no.map(r=>nameRow(r,'no')).join('')+ed('no');
+  if(rest.length)h+='<div class="eyebrow">טרם ענו ('+num(rest.length)+') · "הודעה" שולחת תזכורת</div>'+rest.map(p=>'<div class="row" style="padding:5px 0">'+av(p,28)+'<span class="grow">'+esc(p.name)+'</span>'+waBtn('remind',p)+'</div>').join('')+ed('remind');
+  h+='<div class="row"><label class="f grow">מספר מקומות<input id="evCap2" type="number" inputmode="numeric" min="2" value="'+cap+'"></label><button class="btn" data-a="capset" style="align-self:flex-end">עדכן</button></div>';
   if(rest.length)h+='<div class="row"><select id="evAdd" aria-label="הוסף שחקן"><option value="">הוסף שחקן ידנית</option>'+rest.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('')+'</select><button class="btn" data-a="evadd">הוסף</button></div>';
-  h+='<label class="f">נוסח ההזמנה ({date} ו-{link} יוחלפו)<textarea class="tpl" data-in="tpl">'+esc((S.tpl&&S.tpl.invite)||DEF_TPL)+'</textarea></label>';
+  const inv=(S.tpl&&S.tpl.invite)||DEF_TPL;
+  h+='<label class="f">נוסח ההזמנה ({date} ו-{link} יוחלפו)<textarea class="tpl" data-in="tpl:invite">'+esc(inv)+'</textarea></label>'+(inv.includes('{link}')&&inv.includes('{date}')?'':'<span class="pill warn">חסר {date} או {link} בנוסח</span>')+'<button class="btn sm" data-a="tplreset" data-k="invite" style="align-self:flex-start">החזר לנוסח המקורי</button>';
   h+='<div class="acts"><a class="btn link" target="_blank" rel="noopener" href="https://wa.me/?text='+encodeURIComponent(inviteText())+'">שלח לקבוצה בוואטסאפ</a><button class="btn" data-a="cpinvite">העתק הזמנה</button></div>';
   h+='<button class="btn primary block" data-a="fromevent">פתח משחק מהרשימה</button>';
   h+=ui.confirm==='evcancel'?'<div class="seg2"><button class="btn danger" data-a="evcancelyes">בטל את הערב</button><button class="btn" data-a="cancel">חזרה</button></div>':'<button class="btn danger" data-a="evcancel">בטל ערב</button>';
@@ -676,9 +754,15 @@ function boardV(d){
   const mk=rows=>{const mx=Math.max(1,...rows.map(x=>Math.abs(+x.net)));
     return rows.map(x=>{const n=+x.net,w=Math.max(3,Math.round(Math.abs(n)/mx*100));
       return '<div class="rk '+(n>0?'up':n<0?'dn':'')+'">'+av({name:x.name,photo:photo[x.id]},34)+'<span class="grow"><span>'+esc(x.name)+'</span>'+(x.id===meId?'<i class="me">אתה</i>':'')+(x.games?'<div class="muted small">'+num(x.games)+' משחקים</div>':'')+'</span><b class="'+cls(n)+'">'+signed(n)+'</b><span class="rb" style="width:'+w+'%"></span></div>';}).join('');};
-  let h='<section class="card"><h2>דירוג כללי</h2><span class="muted small">מהמפסיד הכי גדול למרוויח הכי גדול</span>'+mk(b.overall)+'</section>';
+  let h='<section class="card"><h2>דירוג כללי</h2><span class="muted small">מהמרוויח הכי גדול למפסיד הכי גדול</span>'+mk(b.overall.slice().reverse())+'</section>';
   if(b.nights&&b.nights.length)h+='<section class="card"><h2>דירוג לפי ערב</h2>'+b.nights.map((n,i)=>'<details'+(i===0?' open':'')+'><summary><b>'+dateHe(n.date)+'</b> <span class="muted small">'+esc(n.name)+'</span></summary>'+mk(n.rows||[])+'</details>').join('')+'</section>';
   return h;
+}
+function liveCardV(l){
+  if(!l)return '';
+  const pl=l.players||[],pot=pl.reduce((a,p)=>a+(+p.buy||0),0),mx=Math.max(1,...pl.map(p=>+p.buy||0));
+  return '<section class="card live"><div class="row"><span class="dot" aria-hidden="true"></span><h2 class="grow">שידור חי</h2><span class="pill">'+(l.status==='cash'?'ספירת סיום':'המשחק מתנהל')+'</span></div><div class="muted small">'+esc(l.name||'')+(l.banker?' · בנקאי: '+esc(l.banker):'')+'</div><div class="row"><span class="muted">הקופה</span><span class="grow"></span><span class="big">'+money(pot)+'</span></div>'
+    +pl.map(p=>'<div class="rk">'+av(p,34)+'<span class="grow"><span>'+esc(p.name)+'</span><div class="muted small">'+num(p.n)+' כניסות</div></span><b>'+money(p.buy)+'</b><span class="rb" style="width:'+Math.max(3,Math.round((+p.buy||0)/mx*100))+'%;background:var(--accent)"></span></div>').join('')+'</section>';
 }
 function playerPageV(){
   if(PUB.loading)return '<div class="card"><span class="muted">טוען…</span></div>';
@@ -687,6 +771,7 @@ function playerPageV(){
   let h='<section class="hero"><div class="who">'+av(d.player,64)+'<div><div class="eyebrow">מאזן אישי'+(PUB.stale?' · מידע שמור, אין חיבור':'')+'</div><h1>'+esc(d.player.name)+'</h1></div></div>'
     +'<div><div class="hnet num '+cls(net)+'">'+signed(net)+'</div><div class="hsub">'+(net>0?'אתה ברווח':net<0?'אתה בהפסד':'אתה מאוזן')+(s.games?' אחרי '+num(s.games)+' משחקים':'')+'</div></div>'
     +'<div class="stats"><div class="stat"><b>'+num(s.wins+'/'+s.games)+'</b><span>ניצחונות</span></div><div class="stat"><b class="'+(s.games?cls(net/s.games):'')+'">'+(s.games?signed(r2(net/s.games)):'—')+'</b><span>ממוצע למשחק</span></div><div class="stat"><b>'+num(s.no_show)+'</b><span>לא הגעת אחרי אישור</span></div></div></section>';
+  h+=liveCardV(d.live);
   if(d.tonight){
     const es=d.tonight.entries||[],tot=es.reduce((a,e)=>a+(+e.amount||0),0);
     h+='<section class="card"><div class="eyebrow">הערב · '+esc(d.tonight.name)+'</div><div class="row"><span class="grow">סה"כ ביי-אין</span><span class="big">'+money(tot)+'</span></div>'+(es.length?'<div class="tags">'+es.map(e=>'<span class="pill">'+num(fmtMoney(e.amount))+' · '+(M_HE[e.method]||'')+'</span>').join('')+'</div>':'<span class="muted small">עדיין אין ביי-אין רשום</span>')+'</section>';
@@ -752,6 +837,15 @@ Object.assign(A,{
     await loadEvent();render();
   },
   async rmrsvp(el){await sb.from('rsvps').delete().eq('event_id',EV.ev.id).eq('player_id',el.dataset.pid);await loadEvent();render();},
+  sent(el){S.sent=S.sent||{};S.sent[EV.ev.id+':'+el.dataset.k+':'+el.dataset.pid]=1;save();setTimeout(()=>{if(!editing())render();},500);},
+  mute(){S.mute=!S.mute;save();render();if(!S.mute)baa(50);},
+  tplreset(el){const k=el.dataset.k;S.tpl=S.tpl||{};delete S.tpl[k];save();render();toast('הוחזר הנוסח המקורי');},
+  async capset(){
+    const c=Math.max(2,Math.floor(+document.getElementById('evCap2').value||0));
+    const r=await sb.from('events').update({capacity:c}).eq('id',EV.ev.id);
+    if(r.error){toast('העדכון נכשל');return;}
+    await loadEvent();render();toast('מספר המקומות עודכן');
+  },
   cpinvite(){copy(inviteText(),'ההזמנה הועתקה');},
   fromevent(){
     const L=evLists(),d=newDraft();
@@ -800,7 +894,7 @@ function onInput(el,ev){
   else if(t==='chip'){const c=ui.draft.chips[+p[1]];if(c)c[p[2]]=el.value;}
   else if(t==='amt'){ui.amt[p[1]]=el.value;}
   else if(t==='box'){ui.boxIn=el.value;}
-  else if(t==='tpl'){S.tpl=S.tpl||{};S.tpl.invite=el.value;save();}
+  else if(t==='tpl'){S.tpl=S.tpl||{};S.tpl[p[1]||'invite']=el.value;save();}
   else if(t==='cc'||t==='cd'){
     const g=G();g.cashouts=g.cashouts||{};
     const c=g.cashouts[p[1]]||(g.cashouts[p[1]]={counts:{},direct:''});
@@ -815,5 +909,6 @@ function onInput(el,ev){
 try{if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
 if(MODE==='admin'){render();initCloud();}else pubStart();
 </script>
+
 </body>
 </html>
